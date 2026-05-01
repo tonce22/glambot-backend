@@ -194,14 +194,14 @@ def expense_stats(_: dict = Depends(require_admin)):
 
 @app.post("/api/expenses", status_code=201)
 def create_expense(body: ExpenseCreate, current_user: dict = Depends(require_admin)):
-    exp_id = db.create_expense(body.title, body.amount, body.category, body.date, body.notes, int(current_user["sub"]))
+    exp_id = db.create_expense(body.title, body.amount, body.category, body.date, body.notes, int(current_user["sub"]), body.file_data, body.file_name, body.file_type)
     return {"id": exp_id, "message": "Expense created"}
 
 @app.put("/api/expenses/{expense_id}")
 def update_expense(expense_id: int, body: ExpenseUpdate, _: dict = Depends(require_admin)):
     if not db.get_expense_by_id(expense_id):
         raise HTTPException(status_code=404, detail="Expense not found")
-    db.update_expense(expense_id, body.title, body.amount, body.category, body.date, body.notes)
+    db.update_expense(expense_id, body.title, body.amount, body.category, body.date, body.notes, body.file_data, body.file_name, body.file_type)
     return {"message": "Expense updated"}
 
 @app.delete("/api/expenses/{expense_id}")

@@ -61,6 +61,9 @@ class ExpenseCreate(BaseModel):
     category: str = "other"
     date: Optional[str] = None
     notes: Optional[str] = None
+    file_data: Optional[str] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
 
 
 class ExpenseUpdate(ExpenseCreate):

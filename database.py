@@ -76,10 +76,18 @@ def init_db():
                 category TEXT NOT NULL DEFAULT 'other',
                 date TEXT,
                 notes TEXT,
+                file_data TEXT,
+                file_name TEXT,
+                file_type TEXT,
                 created_by INTEGER REFERENCES users(id),
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
+        for col in ["file_data", "file_name", "file_type"]:
+            try:
+                conn.execute(f"ALTER TABLE expenses ADD COLUMN {col} TEXT")
+            except Exception:
+                pass
 
 
 def seed_default_admin():
@@ -247,19 +255,21 @@ def get_expense_by_id(expense_id: int) -> Optional[dict]:
         row = conn.execute("SELECT * FROM expenses WHERE id = ?", (expense_id,)).fetchone()
         return dict(row) if row else None
 
-def create_expense(title: str, amount: float, category: str, date: str, notes: str, user_id: int) -> int:
+def create_expense(title: str, amount: float, category: str, date: str, notes: str, user_id: int,
+                   file_data: str = None, file_name: str = None, file_type: str = None) -> int:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO expenses (title, amount, category, date, notes, created_by) VALUES (?,?,?,?,?,?)",
-            (title, amount, category, date, notes, user_id)
+            "INSERT INTO expenses (title, amount, category, date, notes, file_data, file_name, file_type, created_by) VALUES (?,?,?,?,?,?,?,?,?)",
+            (title, amount, category, date, notes, file_data, file_name, file_type, user_id)
         )
         return cur.lastrowid
 
-def update_expense(expense_id: int, title: str, amount: float, category: str, date: str, notes: str):
+def update_expense(expense_id: int, title: str, amount: float, category: str, date: str, notes: str,
+                   file_data: str = None, file_name: str = None, file_type: str = None):
     with get_conn() as conn:
         conn.execute(
-            "UPDATE expenses SET title=?, amount=?, category=?, date=?, notes=? WHERE id=?",
-            (title, amount, category, date, notes, expense_id)
+            "UPDATE expenses SET title=?, amount=?, category=?, date=?, notes=?, file_data=?, file_name=?, file_type=? WHERE id=?",
+            (title, amount, category, date, notes, file_data, file_name, file_type, expense_id)
         )
 
 def delete_expense(expense_id: int):
