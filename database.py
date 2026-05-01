@@ -57,6 +57,17 @@ def init_db():
             );
 
             INSERT OR IGNORE INTO counter (id, value) VALUES (1, 0);
+        """)
+        # Safe migrations for existing databases
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE expenses ADD COLUMN notes TEXT")
+        except Exception:
+            pass
+        conn.executescript("""
 
             CREATE TABLE IF NOT EXISTS expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
