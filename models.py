@@ -10,6 +10,7 @@ class UserLogin(BaseModel):
 class UserCreate(BaseModel):
     name: str
     username: str
+    email: Optional[str] = None
     password: str
     role: str  # admin | manager | viewer
 
@@ -17,6 +18,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     name: str
     username: str
+    email: Optional[str] = None
     password: Optional[str] = None
     role: str
 

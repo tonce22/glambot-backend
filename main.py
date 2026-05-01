@@ -117,7 +117,7 @@ def create_user(body: UserCreate, _: dict = Depends(require_admin)):
     if db.get_user_by_username(body.username):
         raise HTTPException(status_code=400, detail="Username already exists")
     pw_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
-    user_id = db.create_user(body.name, body.username, pw_hash, body.role)
+    user_id = db.create_user(body.name, body.username, body.email, pw_hash, body.role)
     return {"id": user_id, "message": "User created"}
 
 
@@ -126,7 +126,7 @@ def update_user(user_id: int, body: UserUpdate, _: dict = Depends(require_admin)
     if not db.get_user_by_id(user_id):
         raise HTTPException(status_code=404, detail="User not found")
     pw_hash = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode() if body.password else None
-    db.update_user(user_id, body.name, body.username, pw_hash, body.role)
+    db.update_user(user_id, body.name, body.username, body.email, pw_hash, body.role)
     return {"message": "User updated"}
 
 

@@ -22,6 +22,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 username TEXT NOT NULL UNIQUE,
+                email TEXT,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL CHECK(role IN ('admin','manager','viewer')),
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -77,7 +78,7 @@ def seed_default_admin():
             pw_hash = bcrypt.hashpw(b"glambot2024", bcrypt.gensalt()).decode()
             conn.execute(
                 "INSERT INTO users (name, username, password_hash, role) VALUES (?, ?, ?, ?)",
-                ("Tezo Tabidze", "admin", pw_hash, "admin")
+                ("Rezo Tabidze", "admin", pw_hash, "admin")
             )
 
 
@@ -98,6 +99,7 @@ def _user_dict(row) -> dict:
         "id": row["id"],
         "name": row["name"],
         "username": row["username"],
+        "email": row["email"] if "email" in row.keys() else None,
         "password_hash": row["password_hash"],
         "role": row["role"],
         "created_at": row["created_at"]
@@ -107,7 +109,7 @@ def _user_dict(row) -> dict:
 def get_all_users() -> list:
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, name, username, role, created_at FROM users ORDER BY id"
+            "SELECT id, name, username, email, role, created_at FROM users ORDER BY id"
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -124,26 +126,26 @@ def get_user_by_username(username: str) -> Optional[dict]:
         return _user_dict(row)
 
 
-def create_user(name: str, username: str, password_hash: str, role: str) -> int:
+def create_user(name: str, username: str, email: Optional[str], password_hash: str, role: str) -> int:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO users (name, username, password_hash, role) VALUES (?, ?, ?, ?)",
-            (name, username, password_hash, role)
+            "INSERT INTO users (name, username, email, password_hash, role) VALUES (?, ?, ?, ?, ?)",
+            (name, username, email, password_hash, role)
         )
         return cur.lastrowid
 
 
-def update_user(user_id: int, name: str, username: str, password_hash: Optional[str], role: str):
+def update_user(user_id: int, name: str, username: str, email: Optional[str], password_hash: Optional[str], role: str):
     with get_conn() as conn:
         if password_hash:
             conn.execute(
-                "UPDATE users SET name=?, username=?, password_hash=?, role=? WHERE id=?",
-                (name, username, password_hash, role, user_id)
+                "UPDATE users SET name=?, username=?, email=?, password_hash=?, role=? WHERE id=?",
+                (name, username, email, password_hash, role, user_id)
             )
         else:
             conn.execute(
-                "UPDATE users SET name=?, username=?, role=? WHERE id=?",
-                (name, username, role, user_id)
+                "UPDATE users SET name=?, username=?, email=?, role=? WHERE id=?",
+                (name, username, email, role, user_id)
             )
 
 
