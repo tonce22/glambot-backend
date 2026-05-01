@@ -51,3 +51,15 @@ class InvoiceCreate(BaseModel):
 
 class InvoiceUpdate(InvoiceCreate):
     pass
+
+
+class ExpenseCreate(BaseModel):
+    title: str
+    amount: float
+    category: str = "other"
+    date: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ExpenseUpdate(ExpenseCreate):
+    pass

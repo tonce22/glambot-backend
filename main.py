@@ -10,6 +10,7 @@ import database as db
 from models import (
     UserCreate, UserUpdate, UserLogin,
     InvoiceCreate, InvoiceUpdate,
+    ExpenseCreate, ExpenseUpdate,
     TokenResponse
 )
 
@@ -179,3 +180,33 @@ def delete_invoice(invoice_id: int, _: dict = Depends(require_admin)):
 @app.get("/api/stats")
 def get_stats(_: dict = Depends(get_current_user)):
     return db.get_stats()
+
+
+# ── EXPENSE ROUTES ────────────────────────────────────────
+
+@app.get("/api/expenses")
+def list_expenses(_: dict = Depends(require_admin)):
+    return db.get_all_expenses()
+
+@app.get("/api/expenses/stats")
+def expense_stats(_: dict = Depends(require_admin)):
+    return db.get_expense_stats()
+
+@app.post("/api/expenses", status_code=201)
+def create_expense(body: ExpenseCreate, current_user: dict = Depends(require_admin)):
+    exp_id = db.create_expense(body.title, body.amount, body.category, body.date, body.notes, int(current_user["sub"]))
+    return {"id": exp_id, "message": "Expense created"}
+
+@app.put("/api/expenses/{expense_id}")
+def update_expense(expense_id: int, body: ExpenseUpdate, _: dict = Depends(require_admin)):
+    if not db.get_expense_by_id(expense_id):
+        raise HTTPException(status_code=404, detail="Expense not found")
+    db.update_expense(expense_id, body.title, body.amount, body.category, body.date, body.notes)
+    return {"message": "Expense updated"}
+
+@app.delete("/api/expenses/{expense_id}")
+def delete_expense(expense_id: int, _: dict = Depends(require_admin)):
+    if not db.get_expense_by_id(expense_id):
+        raise HTTPException(status_code=404, detail="Expense not found")
+    db.delete_expense(expense_id)
+    return {"message": "Expense deleted"}

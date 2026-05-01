@@ -56,6 +56,17 @@ def init_db():
             );
 
             INSERT OR IGNORE INTO counter (id, value) VALUES (1, 0);
+
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                amount REAL NOT NULL,
+                category TEXT NOT NULL DEFAULT 'other',
+                date TEXT,
+                notes TEXT,
+                created_by INTEGER REFERENCES users(id),
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         """)
 
 
@@ -209,6 +220,46 @@ def update_invoice(invoice_id: int, data: InvoiceUpdate):
 def delete_invoice(invoice_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
+
+
+# ── EXPENSES ──────────────────────────────────────────────
+
+def get_all_expenses() -> list:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM expenses ORDER BY date DESC, id DESC").fetchall()
+        return [dict(r) for r in rows]
+
+def get_expense_by_id(expense_id: int) -> Optional[dict]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM expenses WHERE id = ?", (expense_id,)).fetchone()
+        return dict(row) if row else None
+
+def create_expense(title: str, amount: float, category: str, date: str, notes: str, user_id: int) -> int:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO expenses (title, amount, category, date, notes, created_by) VALUES (?,?,?,?,?,?)",
+            (title, amount, category, date, notes, user_id)
+        )
+        return cur.lastrowid
+
+def update_expense(expense_id: int, title: str, amount: float, category: str, date: str, notes: str):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE expenses SET title=?, amount=?, category=?, date=?, notes=? WHERE id=?",
+            (title, amount, category, date, notes, expense_id)
+        )
+
+def delete_expense(expense_id: int):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+
+def get_expense_stats() -> dict:
+    with get_conn() as conn:
+        total = conn.execute("SELECT COALESCE(SUM(amount),0) as s FROM expenses").fetchone()["s"]
+        by_cat = conn.execute(
+            "SELECT category, COALESCE(SUM(amount),0) as s FROM expenses GROUP BY category"
+        ).fetchall()
+        return {"total_spent": total, "by_category": {r["category"]: r["s"] for r in by_cat}}
 
 
 def get_stats() -> dict:
