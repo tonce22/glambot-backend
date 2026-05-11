@@ -1,5 +1,5 @@
-import pymysql
-import pymysql.cursors
+import psycopg2
+import psycopg2.extras
 import json
 import bcrypt
 import os
@@ -7,23 +7,13 @@ from datetime import datetime
 from typing import Optional
 from models import InvoiceCreate, InvoiceUpdate
 
-# ── MySQL connection settings (set these as env vars in cPanel Python App) ──
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_DB   = os.getenv("MYSQL_DB",   "glambotgec0a_glambot")
-MYSQL_USER = os.getenv("MYSQL_USER", "glambotgec0a_user")
-MYSQL_PASS = os.getenv("MYSQL_PASS", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 def get_conn():
-    return pymysql.connect(
-        host=MYSQL_HOST,
-        user=MYSQL_USER,
-        password=MYSQL_PASS,
-        database=MYSQL_DB,
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-        autocommit=True
-    )
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
+    return conn
 
 
 def init_db():
@@ -32,60 +22,64 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    username VARCHAR(255) NOT NULL UNIQUE,
-                    email VARCHAR(255),
-                    password_hash VARCHAR(255) NOT NULL,
-                    role ENUM('admin','manager','viewer') NOT NULL,
-                    created_at DATETIME NOT NULL DEFAULT NOW()
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    username TEXT NOT NULL UNIQUE,
+                    email TEXT,
+                    password_hash TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('admin','manager','viewer')),
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS invoices (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    number VARCHAR(64) NOT NULL UNIQUE,
-                    language VARCHAR(8) NOT NULL DEFAULT 'en',
-                    status ENUM('draft','pending','paid') NOT NULL DEFAULT 'draft',
-                    issue_date VARCHAR(32),
-                    due_date VARCHAR(32),
-                    event_type VARCHAR(255),
-                    event_date VARCHAR(32),
-                    client_name VARCHAR(255),
-                    client_phone VARCHAR(64),
-                    client_email VARCHAR(255),
+                    id SERIAL PRIMARY KEY,
+                    number TEXT NOT NULL UNIQUE,
+                    language TEXT NOT NULL DEFAULT 'en',
+                    status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','pending','paid')),
+                    issue_date TEXT,
+                    due_date TEXT,
+                    event_type TEXT,
+                    event_date TEXT,
+                    client_name TEXT,
+                    client_phone TEXT,
+                    client_email TEXT,
                     client_address TEXT,
-                    bank_name VARCHAR(255),
-                    bank_account VARCHAR(255),
+                    bank_name TEXT,
+                    bank_account TEXT,
                     notes TEXT,
-                    items LONGTEXT NOT NULL DEFAULT '[]',
-                    total DOUBLE NOT NULL DEFAULT 0,
-                    created_by INT,
-                    created_at DATETIME NOT NULL DEFAULT NOW(),
-                    updated_at DATETIME NOT NULL DEFAULT NOW()
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    items TEXT NOT NULL DEFAULT '[]',
+                    total DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    created_by INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
             """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS counter (
-                    id INT PRIMARY KEY DEFAULT 1,
-                    value INT NOT NULL DEFAULT 0
-                ) ENGINE=InnoDB
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    value INTEGER NOT NULL DEFAULT 0
+                )
             """)
-            cur.execute("INSERT IGNORE INTO counter (id, value) VALUES (1, 0)")
+            cur.execute("""
+                INSERT INTO counter (id, value)
+                VALUES (1, 0)
+                ON CONFLICT DO NOTHING
+            """)
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS expenses (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    title VARCHAR(255) NOT NULL,
-                    amount DOUBLE NOT NULL,
-                    category VARCHAR(64) NOT NULL DEFAULT 'other',
-                    date VARCHAR(32),
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    amount DOUBLE PRECISION NOT NULL,
+                    category TEXT NOT NULL DEFAULT 'other',
+                    date TEXT,
                     notes TEXT,
-                    file_data LONGTEXT,
-                    file_name VARCHAR(255),
-                    file_type VARCHAR(64),
-                    created_by INT,
-                    created_at DATETIME NOT NULL DEFAULT NOW()
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    file_data TEXT,
+                    file_name TEXT,
+                    file_type TEXT,
+                    created_by INTEGER,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
             """)
     finally:
         conn.close()
@@ -94,7 +88,7 @@ def init_db():
 def seed_default_admin():
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT id FROM users WHERE username = 'admin'")
             if not cur.fetchone():
                 pw_hash = bcrypt.hashpw(b"glambot2024", bcrypt.gensalt()).decode()
@@ -109,9 +103,8 @@ def seed_default_admin():
 def next_invoice_number() -> str:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE counter SET value = value + 1 WHERE id = 1")
-            cur.execute("SELECT value FROM counter WHERE id = 1")
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute("UPDATE counter SET value = value + 1 WHERE id = 1 RETURNING value")
             row = cur.fetchone()
             year = datetime.now().year
             return f"GBG-{year}-{row['value']:04d}"
@@ -124,10 +117,9 @@ def next_invoice_number() -> str:
 def get_all_users() -> list:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT id, name, username, email, role, created_at FROM users ORDER BY id")
-            rows = cur.fetchall()
-            return [dict(r) for r in rows]
+            return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
 
@@ -135,7 +127,7 @@ def get_all_users() -> list:
 def get_user_by_id(user_id: int) -> Optional[dict]:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
             row = cur.fetchone()
             return dict(row) if row else None
@@ -146,7 +138,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 def get_user_by_username(username: str) -> Optional[dict]:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT * FROM users WHERE username = %s", (username,))
             row = cur.fetchone()
             return dict(row) if row else None
@@ -159,10 +151,10 @@ def create_user(name: str, username: str, email: Optional[str], password_hash: s
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO users (name, username, email, password_hash, role) VALUES (%s, %s, %s, %s, %s)",
+                "INSERT INTO users (name, username, email, password_hash, role) VALUES (%s, %s, %s, %s, %s) RETURNING id",
                 (name, username, email, password_hash, role)
             )
-            return cur.lastrowid
+            return cur.fetchone()[0]
     finally:
         conn.close()
 
@@ -207,7 +199,7 @@ def _invoice_dict(row) -> Optional[dict]:
 def get_all_invoices() -> list:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT * FROM invoices ORDER BY id DESC")
             return [_invoice_dict(r) for r in cur.fetchall()]
     finally:
@@ -217,7 +209,7 @@ def get_all_invoices() -> list:
 def get_invoice_by_id(invoice_id: int) -> Optional[dict]:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT * FROM invoices WHERE id = %s", (invoice_id,))
             return _invoice_dict(cur.fetchone())
     finally:
@@ -236,6 +228,7 @@ def create_invoice(data: InvoiceCreate, user_id: int) -> int:
                  client_name, client_phone, client_email, client_address,
                  bank_name, bank_account, notes, items, total, created_by)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
             """, (
                 number, data.language, data.status,
                 data.issue_date, data.due_date, data.event_type, data.event_date,
@@ -244,7 +237,7 @@ def create_invoice(data: InvoiceCreate, user_id: int) -> int:
                 json.dumps([i.dict() for i in data.items]),
                 total, user_id
             ))
-            return cur.lastrowid
+            return cur.fetchone()[0]
     finally:
         conn.close()
 
@@ -288,7 +281,7 @@ def delete_invoice(invoice_id: int):
 def get_all_expenses() -> list:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT * FROM expenses ORDER BY date DESC, id DESC")
             return [dict(r) for r in cur.fetchall()]
     finally:
@@ -298,7 +291,7 @@ def get_all_expenses() -> list:
 def get_expense_by_id(expense_id: int) -> Optional[dict]:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT * FROM expenses WHERE id = %s", (expense_id,))
             row = cur.fetchone()
             return dict(row) if row else None
@@ -312,10 +305,10 @@ def create_expense(title, amount, category, date, notes, user_id,
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO expenses (title, amount, category, date, notes, file_data, file_name, file_type, created_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                "INSERT INTO expenses (title, amount, category, date, notes, file_data, file_name, file_type, created_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
                 (title, amount, category, date, notes, file_data, file_name, file_type, user_id)
             )
-            return cur.lastrowid
+            return cur.fetchone()[0]
     finally:
         conn.close()
 
@@ -345,7 +338,7 @@ def delete_expense(expense_id: int):
 def get_expense_stats() -> dict:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT COALESCE(SUM(amount), 0) as s FROM expenses")
             total = cur.fetchone()["s"]
             cur.execute("SELECT category, COALESCE(SUM(amount), 0) as s FROM expenses GROUP BY category")
@@ -358,7 +351,7 @@ def get_expense_stats() -> dict:
 def get_stats() -> dict:
     conn = get_conn()
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
             cur.execute("SELECT COUNT(*) as c FROM invoices")
             total = cur.fetchone()["c"]
             cur.execute("SELECT COUNT(*) as c FROM invoices WHERE status='paid'")
