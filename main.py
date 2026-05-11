@@ -25,6 +25,11 @@ ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
     "https://glambot-georgia.netlify.app",
+    "https://dazzling-frangipane-54d1df.netlify.app",
+    "https://glambot.ge",
+    "https://www.glambot.ge",
+    "http://glambot.ge",
+    "http://www.glambot.ge",
 ] + ([_extra, _extra.replace("https://", "https://www.")] if _extra else [])
 
 
